@@ -1,4 +1,4 @@
-# Compiler to use
+# Compiler to use 
 CXX = g++
 
 # Compiler flags
@@ -12,8 +12,13 @@ SERVER_SRC = server.cc
 CLIENT_EXEC = client
 SERVER_EXEC = server
 
+all: $(CLIENT_EXEC) $(SERVER_EXEC)
+
 $(CLIENT_EXEC): $(CLIENT_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 $(SERVER_EXEC): $(SERVER_SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $^
+	
+clean:
+	rm -f $(CLIENT_EXEC) $(SERVER_EXEC)
