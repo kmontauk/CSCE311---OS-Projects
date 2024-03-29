@@ -8,6 +8,11 @@
 #include <thread> // Only for sleeping while creating and debugging.
 #include <chrono>
 #include "./client.h"
+#include <vector>
+#include <fstream>
+using std::cout;
+using std::string;
+using std::endl;
 
 #define SHM_SIZE 0x400
 
@@ -22,8 +27,8 @@ const char* shm_name = "/my_shared_memory";
 
 // Signal handler to destroy the semaphore
 void destroySemaphore(int signal) {
-    sem_unlink("/my_semaphore");
-    sem_unlink("/my_semaphore2");
+    sem_unlink("/client_semaphore");
+    sem_unlink("/server_semaphore");
     sem_close(server_semaphore);
     sem_close(client_semaphore);
     exit(0);
@@ -35,8 +40,8 @@ int main() {
     signal(SIGTERM, destroySemaphore);
 
     // Attempt to destroy the semaphores before creating them
-    sem_unlink("/my_semaphore");
-    sem_unlink("/my_semaphore2");
+    sem_unlink("/client_semaphore");
+    sem_unlink("/server_semaphore");
 
     // Create the semaphores
     client_semaphore = sem_open("/client_semaphore", O_CREAT | O_EXCL, 0644, 0);
@@ -68,11 +73,12 @@ int main() {
             destroySemaphore(1);
         }
 
-        // Set the size of the shared memory object
+        // Set the size of the shared memory object (shouldn't be necessary as the client already set the size)
         if (ftruncate(shm_fd, SHM_SIZE) == -1) {
             perror("ftruncate");
             destroySemaphore(1);
         }
+        //**/
 
         // Map the shared memory object into the process's address space
         //char* shmp = (char*)mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
@@ -83,38 +89,76 @@ int main() {
         }
 
         // Read the file name and path from the shared memory
-        std::string fileName;
+        std::string file_path;
         for (int i = 0; i < SHM_SIZE; i++) {
-            if (shmp->buf[i] == '!') {
+            if (shmp->buf[0][i] == '!') {
                 break;
             }
-            fileName += shmp->buf[i];
+            file_path += shmp->buf[0][i];
         }
 
+
         // Format for the lines_str is "!<lines_count>"
-        std::string lines_str = shmp->buf + fileName.length();
+        //std::string lines_str = shmp->buf[0] + file_path.length();
         // Extract the lines_count from the lines_str
-        int delimiter_index = lines_str.find('!');
-        lines_str = lines_str.substr(delimiter_index);
-        int lines_count = std::stoi(lines_str.substr(1));
+        //int delimiter_index = lines_str.find('!');
+        //lines_str = lines_str.substr(delimiter_index);
+        //int lines_count = std::stoi(lines_str.substr(1));
+        
+        string lines_str = shmp->buf[1];
+        cout << "lines_str: " << lines_str << endl;
+        int lines_count = std::stoi(lines_str);
+
 
         // Print the path and lines_str
-        std::cout << "File name: " << fileName << std::endl;
+        std::cout << "File name: " << file_path << std::endl;
         std::cout << "Lines count: " << lines_count << std::endl;
 
-        // Open the file
-        FILE* file = fopen(fileName.c_str(), "r");
+        /** Open the file
+        FILE* file = fopen(file_path.c_str(), "r");
         if (file == NULL) {
             perror("fopen");
             destroySemaphore(1);
         }
-        // Transfer the file to shared memory
-        snprintf(shmp->buf, SHM_SIZE, "%s", file);
 
-
+        int i = 0;
         
+        // Transfer the file to a local buffer
+        while (i < lines_count) {
+            if (fgetc(file) == EOF) break;
+            lines[i] = fgetc(file);
+         }
+        **/
 
+        std::ifstream file(file_path);
+        if (!file) {
+            std::cerr << "Unable to open file: " << file_path << std::endl;
+            destroySemaphore(1);
+        }
+
+        std::vector<std::string> lines(lines_count); 
+        int i = 0;
+        // Transfer the file to a local vector
+        std::string line;
+        while (i < lines_count && std::getline(file, line)) {
+            lines[i] = line;
+            lines[i] += '!'; // Add a delimiter to the end of the line
+            cout << lines[i] << endl;
+            ++i;
+        }
+        i = 0;
+        for (string line : lines) {
+            cout << "here?" << endl;
+            int j = 0;
+            while (true) {
+                cout << "wya?" << endl;
+                shmp->buf[i][j] += line.c_str()[j];
+                if (line.c_str()[j] == '!') {
+                    break;
+                }         
+                j++;
+            }
+            i++; 
+        }
     }
-
-    return 0;
 }
