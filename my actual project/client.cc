@@ -50,7 +50,6 @@ int main(int argc, char* argv[]) {
 
         std::cout << "File name, path, and lines_str have been written to shared memory." << std::endl;
 
-        // Read from the shared memory segment
         // Attach to the shared memory segment again
         sharedMemory = (char*)shmat(shmid, NULL, 0);
         if (sharedMemory == (char*)-1) {
@@ -63,9 +62,7 @@ int main(int argc, char* argv[]) {
         // Print the contents of the shared memory
         std::cout << "Data read from shared memory: " << data << std::endl;
 
-        std::cout << "Sleeping for 3 min...\n";
-        std::this_thread::sleep_for(std::chrono::minutes(3));
-        std::cout << "Done sleeping!\n";
+       
 
         return 0;
     }

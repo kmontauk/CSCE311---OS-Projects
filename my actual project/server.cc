@@ -2,24 +2,27 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+#define SHM_SIZE 1024
+
 int main() {
     // Create or get the shared memory segment
-    key_t key = ftok("/home/lrn/Documents/ugh i hate this i hate this i hate this i hate this i hate this i hate this i hate this/my actual project", 'R');
-    int shmid = shmget(key, sizeof(int), 0666 | IPC_CREAT);
+    key_t key = ftok("/tmp", 'A');
+    int shmid = shmget(key, SHM_SIZE, 0666 | IPC_CREAT);
     if (shmid == -1) {
         std::cerr << "Failed to create or get shared memory segment." << std::endl;
         return 1;
     }
 
     // Attach to the shared memory segment
-    int* sharedData = (int*)shmat(shmid, nullptr, 0);
-    if (sharedData == (int*)-1) {
+    char* sharedData = (char*)shmat(shmid, nullptr, 0);
+    if (sharedData == (char*)-1) {
         std::cerr << "Failed to attach to shared memory segment." << std::endl;
         return 1;
     }
 
+    std::string data(sharedData);
     // Read data from the shared memory
-    std::cout << "Data from client: " << *sharedData << std::endl;
+    std::cout << "Data from client: " << data << std::endl;
 
     // Detach from the shared memory segment
     if (shmdt(sharedData) == -1) {
