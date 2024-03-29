@@ -65,7 +65,6 @@ int main(int argc, char* argv[]) {
         //sem_t* server_semaphore = sem_open("/my_semaphore2", 0); 
     }
 
-
     // Create the file name, path, and lines_str
     const char* file_path = argv[1];
     //std::string lines_str = "!";
@@ -73,20 +72,19 @@ int main(int argc, char* argv[]) {
     std::string lines_str = std::to_string(lines_count);
     const char* lines_count_char = lines_str.c_str();
     //lines_str += std::to_string(lines_count);
-    //std::cout << lines_str << std::endl;
+    std::cout << lines_str << std::endl;
     
     // Copy the file path and lines_str to the shared memory
     strncpy(shmp->buf[0], file_path, SHM_SIZE); // file path copy
-    strncpy(shmp->buf[1], lines_count_char, SHM_SIZE); // lines_count copy
+    //strncpy(shmp->buf[1], lines_count_char, SHM_SIZE); // lines_count copy 
 
-    //strncat(shmp->buf[1], lines_str.c_str(), SHM_SIZE - strlen(shmp->buf[1]) - 1); // lines_count copt
+    strncat(shmp->buf[1], lines_str.c_str(), SHM_SIZE - strlen(shmp->buf[1]) - 1); // lines_count copt
 
     // Unmap the shared memory object
     if (munmap(shmp, SHM_SIZE) == -1) {
         perror("munmap");
         return 1;
     }
-
     // Signal the server that the shared memory is ready
     sem_post(client_semaphore);
 
@@ -101,17 +99,22 @@ int main(int argc, char* argv[]) {
     // sleep for 1 seconds
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-
+/**
     std::string data(shmp->buf[0]);
     std::string data2(shmp->buf[1]);
-
     // Print the contents of the shared memory
     std::cout << "Data read from shared memory: " << data << std::endl;
     std::cout << "Data read from shared memory: " << data2 << std::endl;
-    
-    for(int i = 0; i < lines_count; i++) {
-        std::cout << shmp->buf[i] << std::endl;
+**/
+
+    // Begin processing lines into a vector
+    std::vector <std::string> lines;
+    for (int i = 0; i < lines_count; i++) {
+        lines.push_back(shmp->buf[i]);
+        std::cout << "Line " << i << ": " << lines[i] << std::endl;
+
     }
+
 
     // Unmap the shared memory object again
     if (munmap(shmp, SHM_SIZE) == -1) {

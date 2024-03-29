@@ -62,7 +62,7 @@ int main() {
         sem_post(server_semaphore);
         std::cout << "Server is ready" << std::endl;
 
-        // Lock the barrier semaphore
+        // Lock the barrier semaphore (wait for client to be ready)
         sem_wait(client_semaphore);
         std::cout << "Server is processing client request" << std::endl;
 
@@ -73,16 +73,9 @@ int main() {
             destroySemaphore(1);
         }
 
-        // Set the size of the shared memory object (shouldn't be necessary as the client already set the size)
-        if (ftruncate(shm_fd, SHM_SIZE) == -1) {
-            perror("ftruncate");
-            destroySemaphore(1);
-        }
-        //**/
-
         // Map the shared memory object into the process's address space
         //char* shmp = (char*)mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-        shmp = (shmbuf*)mmap(NULL, sizeof(*shmp), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        shmp = (shmbuf*) mmap(NULL, sizeof(*shmp), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         if (shmp == MAP_FAILED) {
             perror("mmap");
             destroySemaphore(1);
@@ -90,28 +83,15 @@ int main() {
 
         // Read the file name and path from the shared memory
         std::string file_path;
-        for (int i = 0; i < SHM_SIZE; i++) {
-            if (shmp->buf[0][i] == '!') {
-                break;
-            }
-            file_path += shmp->buf[0][i];
-        }
+        file_path = shmp->buf[0];
+        std::cout << "File: " << file_path << std::endl;
 
-
-        // Format for the lines_str is "!<lines_count>"
-        //std::string lines_str = shmp->buf[0] + file_path.length();
-        // Extract the lines_count from the lines_str
-        //int delimiter_index = lines_str.find('!');
-        //lines_str = lines_str.substr(delimiter_index);
-        //int lines_count = std::stoi(lines_str.substr(1));
-        
-        string lines_str = shmp->buf[1];
+        string lines_str = shmp->buf[1]; 
         cout << "lines_str: " << lines_str << endl;
         int lines_count = std::stoi(lines_str);
-
-
+        
         // Print the path and lines_str
-        std::cout << "File name: " << file_path << std::endl;
+        std::cout << "File: " << file_path << std::endl;
         std::cout << "Lines count: " << lines_count << std::endl;
 
         /** Open the file
@@ -146,14 +126,13 @@ int main() {
             cout << lines[i] << endl;
             ++i;
         }
-        i = 0;
+        i = 2;
         for (string line : lines) {
-            cout << "here?" << endl;
             int j = 0;
+            cout << "line: " << line << endl;
             while (true) {
-                cout << "wya?" << endl;
-                shmp->buf[i][j] += line.c_str()[j];
-                if (line.c_str()[j] == '!') {
+                shmp->buf[i][j] = line[j];
+                if (line[j] == '!') {
                     break;
                 }         
                 j++;
