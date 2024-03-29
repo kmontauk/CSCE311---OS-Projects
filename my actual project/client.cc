@@ -99,22 +99,13 @@ int main(int argc, char* argv[]) {
     // sleep for 1 seconds
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-/**
+//**
     std::string data(shmp->buf[0]);
     std::string data2(shmp->buf[1]);
     // Print the contents of the shared memory
     std::cout << "Data read from shared memory: " << data << std::endl;
     std::cout << "Data read from shared memory: " << data2 << std::endl;
-**/
-
-    // Begin processing lines into a vector
-    std::vector <std::string> lines;
-    for (int i = 0; i < lines_count; i++) {
-        lines.push_back(shmp->buf[i]);
-        std::cout << "Line " << i << ": " << lines[i] << std::endl;
-
-    }
-
+/**/
 
     // Unmap the shared memory object again
     if (munmap(shmp, SHM_SIZE) == -1) {

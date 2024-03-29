@@ -126,13 +126,14 @@ int main() {
             cout << lines[i] << endl;
             ++i;
         }
-        i = 2;
+        i = 0;
         for (string line : lines) {
+            //cout << "here?" << endl;
             int j = 0;
-            cout << "line: " << line << endl;
             while (true) {
-                shmp->buf[i][j] = line[j];
-                if (line[j] == '!') {
+                cout << "wya?" << endl;
+                shmp->buf[i][j] += line.c_str()[j];
+                if (line.c_str()[j] == '!') {
                     break;
                 }         
                 j++;
