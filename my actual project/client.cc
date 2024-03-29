@@ -5,11 +5,17 @@
 #include <thread> // Only for sleeping while creating and debugging.
 #include <chrono>
 
-#define SHM_SIZE 1024
+#define SHM_SIZE 0x400
 
 
 
 int main(int argc, char* argv[]) {
+    // Input checking
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <file path> <number of lines>" << std::endl;
+        return 1;
+    }
+
     // Generate a unique key for the shared memory segment
     key_t key = ftok("/tmp", 'A');
     if (key == -1) {
@@ -39,8 +45,8 @@ int main(int argc, char* argv[]) {
     lines_str += std::to_string(lines_count);
 
         // Copy the file name, path, and lines_str to the shared memory
-        strncpy(sharedMemory, fileName, SHM_SIZE);
-        strncat(sharedMemory, lines_str.c_str(), SHM_SIZE - strlen(sharedMemory) - 1);
+        strncpy(sharedMemory, fileName, SHM_SIZE); // file name
+        strncat(sharedMemory, lines_str.c_str(), SHM_SIZE - strlen(sharedMemory) - 1); // lines_count
 
         // Detach from the shared memory segment
         if (shmdt(sharedMemory) == -1) {
@@ -62,7 +68,7 @@ int main(int argc, char* argv[]) {
         // Print the contents of the shared memory
         std::cout << "Data read from shared memory: " << data << std::endl;
 
+        // Check for lines
        
-
         return 0;
     }
