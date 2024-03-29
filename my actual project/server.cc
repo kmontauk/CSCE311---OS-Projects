@@ -1,83 +1,120 @@
 #include <iostream>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <csignal>
+#include <semaphore.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <cstring>
+#include <thread> // Only for sleeping while creating and debugging.
+#include <chrono>
+#include "./client.h"
 
 #define SHM_SIZE 0x400
 
-using std::string;
-using std::cout;
-using std::endl;
+struct shmbuf* shmp;
+
+// Global semaphore variable
+sem_t* client_semaphore;
+sem_t* server_semaphore;
+
+// Global shared memory name
+const char* shm_name = "/my_shared_memory";
+
+// Signal handler to destroy the semaphore
+void destroySemaphore(int signal) {
+    sem_unlink("/my_semaphore");
+    sem_unlink("/my_semaphore2");
+    sem_close(server_semaphore);
+    sem_close(client_semaphore);
+    exit(0);
+}
 
 int main() {
-    // Create or get the shared memory segment
-    key_t key = ftok("/tmp", 'A');
-    int shmid = shmget(key, SHM_SIZE, 0666 | IPC_CREAT);
-    if (shmid == -1) {
-        std::cerr << "Failed to create or get shared memory segment." << std::endl;
-        return 1;
-    }
+    // Set up signal handler to destroy the semaphore
+    signal(SIGINT, destroySemaphore);
+    signal(SIGTERM, destroySemaphore);
 
-    // Attach to the shared memory segment
-    char* sharedData = (char*)shmat(shmid, nullptr, 0);
-    if (sharedData == (char*)-1) {
-        std::cerr << "Failed to attach to shared memory segment." << std::endl;
-        return 1;
-    }
+    // Attempt to destroy the semaphores before creating them
+    sem_unlink("/my_semaphore");
+    sem_unlink("/my_semaphore2");
 
-    std::string data(sharedData);
-    // Read data from the shared memory
-    std::cout << "Data from client: " << data << std::endl;
-
-    // Format data to separate the file path and number of lines
-    char temp = data[0];
-    int i = 0;
-    string file_path = "";
-    while (temp != '!') {
-        file_path += data[i];
-        temp = data[i];
-        i++;
-    }
-    string lines_str = data.substr(i, data.length() - i);
-    file_path = file_path.substr(0, file_path.length() - 1);
-    int lines_count = stoi(lines_str);
-
-    // Print the lines_str and file_path
-    std::cout << "File path: " << file_path << std::endl;
-    std::cout << "Lines: " << lines_count << std::endl;
-    
-    // Open the file or signal to client that the file could not be opened
-    FILE* file = fopen(file_path.c_str(), "r");
-    if (file == nullptr) {
-        std::cerr << "Failed to open file." << std::endl;
-        // Signal to client via shared memory that file could not be opened
-        strncpy(sharedData, "!-3", SHM_SIZE);
-        return 1;
-    }
-
-    // Print each line of the file line by line to the stdout
-    char line[256];
-    for (int i = 0; i < lines_count; i++) {
-        if (fgets(line, sizeof(line), file) != nullptr) {
-            // Add a delimiter to the end of the line
-            line[strlen(line) - 1] = '!';
-            // Add the newline character to the end of the line 
-            line[strlen(line)] = '\n';
-            std::cout << line;
-            // Copy the line to the shared memory
-            strncpy(sharedData, line, SHM_SIZE);
-            cout << "Data written to shared memory: " << line << endl;
+    // Create the semaphores
+    client_semaphore = sem_open("/client_semaphore", O_CREAT | O_EXCL, 0644, 0);
+    server_semaphore = sem_open("/server_semaphore", O_CREAT | O_EXCL, 0644, 0);
+    if (client_semaphore == SEM_FAILED || server_semaphore == SEM_FAILED) {
+        if (errno != EEXIST) {
+            std::cerr << "Failed to create semaphore" << std::endl;
+            destroySemaphore(1);
         }
+        std::cerr << "Failed to create semaphore" << std::endl;
+        destroySemaphore(1);
     }
 
-    // Detach from the shared memory segment
-    if (shmdt(sharedData) == -1) {
-        std::cerr << "Failed to detach from shared memory segment." << std::endl;
-        return 1;
+
+    // Server main loop
+    while (true) {
+        // Signal the client that the server is ready
+        sem_post(server_semaphore);
+        std::cout << "Server is ready" << std::endl;
+
+        // Lock the barrier semaphore
+        sem_wait(client_semaphore);
+        std::cout << "Server is processing client request" << std::endl;
+
+        // Connect to shared memory initialized by the client
+        int shm_fd = shm_open(shm_name, O_RDWR, 0666);
+        if (shm_fd == -1) {
+            perror("shm_open");
+            destroySemaphore(1);
+        }
+
+        // Set the size of the shared memory object
+        if (ftruncate(shm_fd, SHM_SIZE) == -1) {
+            perror("ftruncate");
+            destroySemaphore(1);
+        }
+
+        // Map the shared memory object into the process's address space
+        //char* shmp = (char*)mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        shmp = (shmbuf*)mmap(NULL, sizeof(*shmp), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if (shmp == MAP_FAILED) {
+            perror("mmap");
+            destroySemaphore(1);
+        }
+
+        // Read the file name and path from the shared memory
+        std::string fileName;
+        for (int i = 0; i < SHM_SIZE; i++) {
+            if (shmp->buf[i] == '!') {
+                break;
+            }
+            fileName += shmp->buf[i];
+        }
+
+        // Format for the lines_str is "!<lines_count>"
+        std::string lines_str = shmp->buf + fileName.length();
+        // Extract the lines_count from the lines_str
+        int delimiter_index = lines_str.find('!');
+        lines_str = lines_str.substr(delimiter_index);
+        int lines_count = std::stoi(lines_str.substr(1));
+
+        // Print the path and lines_str
+        std::cout << "File name: " << fileName << std::endl;
+        std::cout << "Lines count: " << lines_count << std::endl;
+
+        // Open the file
+        FILE* file = fopen(fileName.c_str(), "r");
+        if (file == NULL) {
+            perror("fopen");
+            destroySemaphore(1);
+        }
+        // Transfer the file to shared memory
+        snprintf(shmp->buf, SHM_SIZE, "%s", file);
+
+
+        
+
     }
-
-    
-
 
     return 0;
 }
