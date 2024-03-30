@@ -50,6 +50,13 @@
         "stop_token": "cpp",
         "streambuf": "cpp",
         "thread": "cpp",
-        "typeinfo": "cpp"
-    }
+        "typeinfo": "cpp",
+        "csignal": "cpp",
+        "fstream": "cpp",
+        "stdio.h": "c",
+        "stat.h": "c",
+        "semaphore.h": "c",
+        "sysinfo.h": "c"
+    },
+    "makefile.makefilePath": "my actual project/makefile"
 }

@@ -7,10 +7,19 @@
 #include <thread> // Only for sleeping while creating and debugging.
 #include <chrono>
 #include "./client.h"
+#include <vector>
+#include <string>
+#include "calculator.h"
+using std::cout; 
+using std::endl;
+using std::string;
+using std::vector;
+
 
 #define SHM_SIZE 0x400
 
 struct shmbuf* shmp;
+
 
 int main(int argc, char* argv[]) {
     // Input checking
@@ -37,7 +46,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Generate a unique name for the shared memory object
-    const char* shm_name = "/my_shared_memory";
+    const char* shm_name = "/client_shared_memory";
 
     // Create the shared memory object
     int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
@@ -67,47 +76,59 @@ int main(int argc, char* argv[]) {
 
     // Create the file name, path, and lines_str
     const char* file_path = argv[1];
-    //std::string lines_str = "!";
+    std::string lines_str = "!";
     int lines_count = std::stoi(argv[2]);
-    std::string lines_str = std::to_string(lines_count);
-    const char* lines_count_char = lines_str.c_str();
-    //lines_str += std::to_string(lines_count);
-    std::cout << lines_str << std::endl;
-    
+    lines_str += std::to_string(lines_count);
+
     // Copy the file path and lines_str to the shared memory
-    strncpy(shmp->buf[0], file_path, SHM_SIZE); // file path copy
-    //strncpy(shmp->buf[1], lines_count_char, SHM_SIZE); // lines_count copy 
+    strncpy(shmp->buf, file_path, SHM_SIZE); // file name
+    strncat(shmp->buf, lines_str.c_str(), SHM_SIZE - strlen(shmp->buf) - 1); // lines_count
 
-    strncat(shmp->buf[1], lines_str.c_str(), SHM_SIZE - strlen(shmp->buf[1]) - 1); // lines_count copt
-
-    // Unmap the shared memory object
-    if (munmap(shmp, SHM_SIZE) == -1) {
-        perror("munmap");
-        return 1;
-    }
-    // Signal the server that the shared memory is ready
-    sem_post(client_semaphore);
 
     std::cout << "File name, path, and lines_str have been written to shared memory." << std::endl;
 
-    // Map the shared memory object into the process's address space again
-    shmp = (shmbuf*) mmap(NULL, SHM_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-    if (shmp == MAP_FAILED) {
-        perror("mmap");
-        return 1;
-    }
-    // sleep for 1 seconds
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::string data(shmp->buf);
 
-//**
-    std::string data(shmp->buf[0]);
-    std::string data2(shmp->buf[1]);
     // Print the contents of the shared memory
     std::cout << "Data read from shared memory: " << data << std::endl;
-    std::cout << "Data read from shared memory: " << data2 << std::endl;
-/**/
 
-    // Unmap the shared memory object again
+    // Signal the server that the shared memory is ready
+    sem_post(client_semaphore);
+
+    // Sleep for 2 seconds to allow the server to process the shared memory
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    // Print contents of shared memory
+    std::string response(shmp->buf);
+    std::cout << "Server response read from shared memory: " << response << std::endl;
+
+    // Process the server response, converting it to a string vector.
+    std::vector<std::string> lines(lines_count); // Initialize the lines vector
+    // Let i = the current index of the response string, j = current line
+    int j = 0;
+    int response_length = response.length();
+    string line;
+    for (int i = 1; i < response_length; i++) {
+        //cout << "hi";
+        if (response[i] == '!') {
+            lines[j] = line;
+            line = "";
+            j++;
+            continue;
+        }
+        line += response[i];
+    }
+
+    // Print the contents of the lines vector
+    cout << "Lines vector contents: " << endl;
+    for (int i = 0; i <= (int)lines.size() - 1; i++) {
+        cout << lines[i] << endl;
+    }
+
+
+
+
+    // Unmap the shared memory object
     if (munmap(shmp, SHM_SIZE) == -1) {
         perror("munmap");
         return 1;
