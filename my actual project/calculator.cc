@@ -67,14 +67,14 @@ double calculate(int size, vector<string> str_vec) {
                 double_vec.insert(double_vec.begin() + i - 1, temp);
                 size -= 2;
                 // i = 1;
-            } else if (double_vec[i] == suby_flag) {
+            } if (double_vec[i] == suby_flag) {
                 double temp = double_vec[i - 1] - double_vec[i + 1];
                 double_vec.erase(double_vec.begin() + i + 1);
                 double_vec.erase(double_vec.begin() + i);
                 double_vec.erase(double_vec.begin() + i - 1);
                 double_vec.insert(double_vec.begin() + i - 1, temp);
                 size -= 2;
-                // i = 1;
+                i -= 2; // Decrease i by 2 to correctly handle subsequent iterations.
             }
         }
     }
