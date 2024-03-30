@@ -1,19 +1,6 @@
-#include <iostream>
-#include <csignal>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <cstring>
-#include <thread> // Only for sleeping while creating and debugging.
-#include <chrono>
-#include <fstream>
-#include <vector>
-#include <string>
-#include "./client.h"
-using std::cout, std::endl, std::string, std::vector;
-
-#define SHM_SIZE 0x400
+// Copyright D. 'L.' Devito 2024
+//#include "./client.h"
+#include <server.h>
 
 struct shmbuf* shmp;
 
@@ -24,7 +11,7 @@ sem_t* server_semaphore;
 // Global shared memory name
 const char* shm_name = "/client_shared_memory";
 
-// Signal handler to destroy the semaphore
+/** This function destroys the semaphore when the server is terminated, or when errors are encountered. This is for redunancy, as well as for continuity for when running the client prior to the server, as the semaphores are always deleted and recreated at server startup anyway */
 void destroySemaphore(int signal) {
     sem_unlink("/client_semaphore");
     sem_unlink("/server_semaphore");
@@ -41,16 +28,14 @@ int main() {
     // Attempt to destroy the semaphores before creating them
     sem_unlink("/client_semaphore");
     sem_unlink("/server_semaphore");
-
+    cout << "SERVER STARTED" << endl;
     // Create the semaphores
     client_semaphore = sem_open("/client_semaphore", O_CREAT | O_EXCL, 0644, 0);
     server_semaphore = sem_open("/server_semaphore", O_CREAT | O_EXCL, 0644, 0);
     if (client_semaphore == SEM_FAILED || server_semaphore == SEM_FAILED) {
         if (errno != EEXIST) {
-            std::cerr << "Failed to create semaphore" << std::endl;
             destroySemaphore(1);
         }
-        std::cerr << "Failed to create semaphore" << std::endl;
         destroySemaphore(1);
     }
 
@@ -59,30 +44,26 @@ int main() {
     while (true) {
         // Signal the client that the server is ready
         sem_post(server_semaphore);
-        std::cout << "Server is ready" << std::endl;
+        std::cout << "Server is ready for client request" << std::endl;
 
         // Lock the barrier semaphore
         sem_wait(client_semaphore);
-        std::cout << "Server is processing client request" << std::endl;
+
+        cout << "CLIENT REQUEST RECEIVED" << endl;
 
         // Connect to shared memory initialized by the client
         int shm_fd = shm_open(shm_name, O_RDWR, 0666);
         if (shm_fd == -1) {
-            perror("shm_open");
             destroySemaphore(1);
         }
 
-        // Set the size of the shared memory object
-        if (ftruncate(shm_fd, SHM_SIZE) == -1) {
-            perror("ftruncate");
-            destroySemaphore(1);
-        }
+        cout << "\tMEMORY OPEN" << endl;
+
 
         // Map the shared memory object into the process's address space
         //char* shmp = (char*)mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         shmp = (shmbuf*)mmap(NULL, sizeof(*shmp), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         if (shmp == MAP_FAILED) {
-            perror("mmap");
             destroySemaphore(1);
         }
 
@@ -103,13 +84,14 @@ int main() {
         int lines_count = std::stoi(lines_str.substr(1));
 
         // Print the path and lines_str
-        std::cout << "File name: " << file_path << std::endl;
-        std::cout << "Lines count: " << lines_count << std::endl;
+        //std::cout << "File name: " << file_path << std::endl;
+        //std::cout << "Lines count: " << lines_count << std::endl;
+        cout << "\tOPENING: " << file_path << endl;
 
         // Open the file using fstream
         std::ifstream file(file_path);
         if (!file) {
-            std::cerr << "Unable to open file: " << file_path << std::endl;
+            std::cout << "Unable to open file: " << file_path << std::endl;
             destroySemaphore(1);
         }
 
@@ -120,18 +102,35 @@ int main() {
         while (i < lines_count && std::getline(file, line)) {
             lines[i] = line;
             lines[i] += '!'; // Add a delimiter to the end of the line
-            cout << lines[i] << endl;
+            //cout << lines[i] << endl;
             ++i;
         }
+
+        // Close the file
+        file.close();
+        cout << "\tFILE CLOSED" << endl;
+
         // Convert the vector to a string 
         std::string string_of_all_lines = "!"; // Start with a delimiter
         for (int i = 0; i < lines_count; i++) {
             string_of_all_lines += lines[i];
         }
-
-
+        
         // Pass the string to shared memory.
         strncpy(shmp->buf, string_of_all_lines.c_str(), SHM_SIZE);
+
+        // Unmap the shared memory object
+        if (munmap(shmp, SHM_SIZE) == -1) {
+            return 1;
+        }
+
+        // Close the shared memory object
+        if (close(shm_fd) == -1) {
+            return 1;
+        }
+
+        cout << "\tMEMORY CLOSED" << endl;
+
         
     }
 

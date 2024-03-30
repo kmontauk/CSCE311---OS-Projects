@@ -1,5 +1,5 @@
 // Copyright D. 'L.' Devito 2024
-#include "calculator.h"
+#include <calculator.h>
 #include <iostream>
 #include <string>
 #include <vector>
