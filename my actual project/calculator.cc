@@ -1,10 +1,12 @@
 // Copyright D. 'L.' Devito 2024
-#include <proj1/calculator.h>
+#include "calculator.h"
 #include <iostream>
 #include <string>
 #include <vector>
 #include <algorithm>
 using std::string, std::vector, std::stod, std::cout, std::endl;
+
+namespace calculator {
 
 /**
  * Calculate() takes an integer representing the size of a vector, as well as
@@ -110,3 +112,6 @@ vector<double> convert_string_to_double(int size, vector<string> str_vec) {
     }
     return converted_vector;
 }
+    
+
+};  // namespace calculator

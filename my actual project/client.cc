@@ -9,16 +9,32 @@
 #include "./client.h"
 #include <vector>
 #include <string>
-#include "calculator.h"
+#include "./calculator.h"
 using std::cout; 
 using std::endl;
 using std::string;
 using std::vector;
-
+using namespace calculator;
 
 #define SHM_SIZE 0x400
 
 struct shmbuf* shmp;
+
+vector <string> convert_line_to_string_vector(string line) {
+    vector<string> string_vec;
+    string temp = "";
+    //cout << "Line: " << line << endl;
+    for (int i = 0; i <= line.length(); i++) {
+        if (line[i] == ' ' || i == line.length()) {
+            //printf("Pushing %s to string_vec\n", temp.c_str());
+            string_vec.push_back(temp);
+            temp = "";
+        } else {
+            temp += line[i];
+        }
+    }
+    return string_vec;
+}
 
 
 int main(int argc, char* argv[]) {
@@ -33,7 +49,6 @@ int main(int argc, char* argv[]) {
     sem_t* server_semaphore = sem_open("/server_semaphore", 0); 
     if (client_semaphore == SEM_FAILED || server_semaphore == SEM_FAILED) {
         perror("sem_open");
-        // 
         while (true) {
             printf("open. up. the server. stop. having it. be closed. \n");
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -70,9 +85,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Wait for the server to signal that it is ready
-    while(server_semaphore == 0) {
-        //sem_t* server_semaphore = sem_open("/my_semaphore2", 0); 
-    }
+    while(server_semaphore == 0) {}
 
     // Create the file name, path, and lines_str
     const char* file_path = argv[1];
@@ -125,9 +138,6 @@ int main(int argc, char* argv[]) {
         cout << lines[i] << endl;
     }
 
-
-
-
     // Unmap the shared memory object
     if (munmap(shmp, SHM_SIZE) == -1) {
         perror("munmap");
@@ -145,6 +155,26 @@ int main(int argc, char* argv[]) {
         perror("shm_unlink");
         return 1;
     }
+    
+    // OKAY. Shared memory garbage is finally over. 
+
+    // Now, we can start the calculation process.
+    // We need a function to convert a line in the string vector to a double vector of individual values.
+    printf("Testing the conversion function...\n");
+    vector <string> test = convert_line_to_string_vector(lines[0]);
+    size_t size = test.size();
+    int size_int = static_cast<int>(size);
+    cout << calculate(size_int, test) << endl;
+
+
+
+
+
+
+
+
+
+    
 
     return 0;
 }

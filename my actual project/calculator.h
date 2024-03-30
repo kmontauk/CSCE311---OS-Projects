@@ -1,10 +1,11 @@
 // Copyright D. L. Devito 2024
-#ifndef PROJ1_CALCULATOR_H_
-#define PROJ1_CALCULATOR_H_
+#ifndef CALCULATOR_H_
+#define CALCULATOR_H_
 #include <string>
 #include <vector>
 using std::string, std::vector;
 
+namespace calculator {
 /**
  * Calculate() takes an integer representing the size of a vector, as well as
  * the corresponding string vector, and calculates the final result before
@@ -21,5 +22,8 @@ double calculate(int size, std::vector<string> string_vec);
 */
 vector<double> convert_string_to_double(int size, vector<string> str_vec);
 
-#endif  // PROJ1_CALCULATOR_H_
 
+
+}  // namespace calculator
+
+#endif  // CALCULATOR_H_
