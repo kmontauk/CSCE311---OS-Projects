@@ -7,6 +7,24 @@ struct timespec time_1;
 
 struct shmbuf* shmp;
 
+// Define a mutex and condition variable
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+// Define global variables for threading
+int current_thread = 0;
+
+long long thread_sum[4];  // This is for the sum of each thread
+int thread_lines[4];  // This is for the number of lines processed by each thread
+
+string response = "";
+int lines_count = 0;
+
+struct ThreadArgs {
+    shmbuf* shmp;
+    int thread_id;
+};
+
 /* This function accepts a line and converts it into a vector containing the 
 values and operations found within it. This is required to pass to calculate() 
 in order to calculate infix notation. */
@@ -23,6 +41,81 @@ vector <string> convert_line_to_string_vector(string line) {
     }
     return string_vec;
 }
+
+void* calculate_thread(void* arg) {
+    // Cast the argument to a ThreadArgs pointer
+    ThreadArgs* args = (ThreadArgs*)arg;
+    // Extract the shared memory object and thread ID
+    shmbuf* shmp = args->shmp;
+    int thread_id = args->thread_id;
+    // I did this as opposed to just reading the global variable for 'response'
+    // because I wanted to follow the guidelines as strictly as possible. But,
+    // this seems more resource intensive (4x identical response variables).
+    std::string response(shmp->buf);
+    
+    // For use in string vector once it is completely filled.
+    int starting_index = 0;
+    if (thread_id ==  0) starting_index = 0;
+    else if (thread_id == 1) starting_index = 1;
+    else if (thread_id == 2) starting_index = 2;
+    else if (thread_id == 3) starting_index = 3;
+
+    long long sum = 0;
+    int response_length = response.length();
+    int lines_processed = 0;
+    std::vector<std::string> lines(lines_count);
+    string line = "";
+
+    
+  
+    // This adds each line into the vector 'lines'
+    int j = 0;
+    for (int i = 1; i < response_length; i++) {
+        //cout << "hi";
+        if (response[i] == '!') {
+            lines[j] = line;
+            line = "";
+            j++;
+            continue;
+        }
+        line += response[i];
+    }
+
+    // This calculates the sum of 1/4th of the lines of the vector.
+    for (int i = starting_index; i < lines_count; i+=4) {
+        vector <string> string_vec = convert_line_to_string_vector(lines[i]);
+        size_t size = string_vec.size();
+        int size_int = static_cast<int>(size);
+        sum += calculate(size_int, string_vec);
+        lines_processed++;
+    }
+
+    // Set the correct thread_sum global variable for further summing
+    // within main() later
+    switch (thread_id) {
+    case 0:
+        thread_sum[0] = sum;
+        thread_lines[0] = lines_processed;
+        break;
+    case 1:
+        thread_sum[1] = sum;
+        thread_lines[1] = lines_processed;
+        break;
+    case 2:
+        thread_sum[2] = sum;
+        thread_lines[2] = lines_processed;
+        break;
+    case 3:
+        thread_sum[3] = sum;
+        thread_lines[3] = lines_processed;
+        break;
+    default:
+        break;
+    }
+
+    return NULL;
+}
+
 
 
 int main(int argc, char* argv[]) {
@@ -79,7 +172,7 @@ int main(int argc, char* argv[]) {
     // Create the file name, path, and lines_str
     const char* file_path = argv[1];
     std::string lines_str = "!";
-    int lines_count = std::stoi(argv[2]);
+    lines_count = std::stoi(argv[2]);
     lines_str += std::to_string(lines_count);
 
     // Copy the file path and lines_str to the shared memory
@@ -87,9 +180,6 @@ int main(int argc, char* argv[]) {
     strncat(shmp->buf, lines_str.c_str(), 
     SHM_SIZE - strlen(shmp->buf) - 1); // lines_count
 
-
-
-    // Print the contents of the shared memory
 
     // Signal the server that the shared memory is ready
     sem_post(client_semaphore);
@@ -102,9 +192,39 @@ int main(int argc, char* argv[]) {
     nanosleep(&time_1, NULL);
     
     // Print contents of shared memory
-    std::string response(shmp->buf);
+    response = shmp->buf; 
     //std::cout << "Server response read from shared memory: " << response << std::endl;
 
+    // Using pthreads to do the same thing we do later with a single thread
+    pthread_t threads[4];
+    // ThreadArgs structure holding shmp and thread_id
+    ThreadArgs thread_args[4];
+    
+    for (int i = 0; i < 4; i++) {
+        thread_args[i].shmp = shmp;
+        thread_args[i].thread_id = i;
+        pthread_create(&threads[i], NULL, calculate_thread, &thread_args[i]);
+    }
+
+    // Wait for all threads to finish
+    for (int i = 0; i < 4; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    long long total = 0;
+    // Sum the sums of the threads
+    for (int i = 0; i < 4; i++) {
+        cout << "THREAD " << i << ": " << thread_lines[i] << " LINES, "
+        << thread_sum[i] << endl;
+        total += thread_sum[i];
+    }
+
+    cout << "SUM: " << total << endl;
+
+
+
+
+    // Single threaded version
     // Process the server response, converting it to a string vector.
     std::vector<std::string> lines(lines_count); // Initialize the lines vector
     // Let i = the current index of the response string, j = current line
@@ -121,6 +241,9 @@ int main(int argc, char* argv[]) {
         }
         line += response[i];
     }
+
+
+
 
     // Print the contents of the lines vector
     /**
@@ -156,5 +279,9 @@ int main(int argc, char* argv[]) {
     }
     cout << "SUM: " << sum << endl;
 
+    
     return 0;
 }
+
+
+
